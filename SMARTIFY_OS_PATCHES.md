@@ -88,14 +88,13 @@ loss on a slowly orbiting background.
   on the context the plugin owns and shares, which used to take it away from
   Flutter's compositor on the way out (`Failed to cleanup compositor shaders`).
 
-## Getting rid of this directory
+## Getting rid of this fork
 
 These are upstream problems, not SmartifyOS ones, and worth a pull request to
-[Knightro63/flutter_angle](https://github.com/Knightro63/flutter_angle). Once a
-release carries them, delete this directory and both `dependency_overrides`
-entries.
+[Knightro63/flutter_angle](https://github.com/Knightro63/flutter_angle) some day.
+Note upstream is a monorepo with the package under `flutter_angle/`, so a real
+fork of it would need `path: flutter_angle` in the dependency; this repository
+is a plain copy with the package at its root, which avoids that.
 
-Until then, note the vendored copy carries ~48 MB of prebuilt ANGLE binaries for
-Windows and Android that nothing here touches. If that is too much for the
-repository, push this directory to a fork and point the overrides at a git ref
-instead of a path.
+Once an upstream release carries these fixes, drop the two
+`dependency_overrides` entries in SmartifyOS and this repository can go.
