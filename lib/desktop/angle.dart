@@ -20,6 +20,15 @@ class FlutterAngleTexture {
   late AngleOptions options;
   late final FlutterAngle _flutterAngle;
 
+  /// Linux only: the two buffers the finished frame is read back into.
+  ///
+  /// Flutter's engine keeps its GL contexts to itself, so a texture allocated
+  /// here is invisible to it. The frame goes across as pixels instead. Two
+  /// buffers, used in turn, so the one being written is never the one Flutter
+  /// is reading.
+  List<Pointer<Void>> pixelBuffers = const [];
+  int _pixelBufferIndex = 0;
+
   LibOpenGLES get rawOpenGl {
     return _flutterAngle._rawOpenGl;
   }
@@ -549,9 +558,22 @@ class FlutterAngle {
       _rawOpenGl.glGenFramebuffers(1, fbo);
       _rawOpenGl.glBindFramebuffer(GL_FRAMEBUFFER, fbo.value);
 
-      final int rbo = (result['openglTexture'] as int?) ?? (result['rbo'] as int?) ?? 0;
+      int rbo = (result['openglTexture'] as int?) ?? (result['rbo'] as int?) ?? 0;
       if(result['openglTexture'] != null){
         _isRBO = false;
+      }
+
+      if(Platform.isLinux && rbo == 0){
+        // On Linux the plugin no longer owns a colour buffer – it only holds
+        // the pixel buffers the frame is read back into – so make one here.
+        final Pointer<Uint32> colour = calloc();
+        _rawOpenGl.glGenRenderbuffers(1, colour.cast());
+        _rawOpenGl.glBindRenderbuffer(GL_RENDERBUFFER, colour.value);
+        _rawOpenGl.glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+        _rawOpenGl.glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        rbo = colour.value;
+        calloc.free(colour);
+        _isRBO = true;
       }
 
       final value = _createFBOTexture(rbo, width, height);
@@ -564,6 +586,13 @@ class FlutterAngle {
         value,
         options
       );
+
+      if(Platform.isLinux){
+        newTexture.pixelBuffers = [
+          Pointer<Void>.fromAddress(result['buffer0'] as int),
+          Pointer<Void>.fromAddress(result['buffer1'] as int),
+        ];
+      }
 
       angleConsole.info(newTexture.toMap());
       _rawOpenGl.glViewport(0, 0, width, height);
@@ -638,6 +667,23 @@ class FlutterAngle {
       _libEGL!.eglSwapBuffers(_display, texture.surfaceId!);
     }
     else{
+      if(Platform.isLinux && texture.pixelBuffers.isNotEmpty){
+        // Read the finished frame into the buffer Flutter is not reading.
+        // Bind explicitly rather than trusting what is left over: the renderer
+        // binds its own framebuffers for shadow passes and does not
+        // necessarily leave this one bound.
+        _rawOpenGl.glBindFramebuffer(GL_FRAMEBUFFER, texture.fboId);
+        texture._pixelBufferIndex = 1 - texture._pixelBufferIndex;
+        _rawOpenGl.glReadPixels(
+          0,
+          0,
+          (texture.options.width*texture.options.dpr).toInt(),
+          (texture.options.height*texture.options.dpr).toInt(),
+          GL_RGBA,
+          GL_UNSIGNED_BYTE,
+          texture.pixelBuffers[texture._pixelBufferIndex],
+        );
+      }
       _rawOpenGl.glBindFramebuffer(GL_FRAMEBUFFER, 0);
       if(Platform.isIOS){
         _rawOpenGl.glFlush();
@@ -646,7 +692,10 @@ class FlutterAngle {
     }
 
     if (!Platform.isAndroid) {
-      await _channel.invokeMethod('textureFrameAvailable',  {"textureId": texture.textureId});
+      await _channel.invokeMethod('textureFrameAvailable',  {
+        "textureId": texture.textureId,
+        "index": texture._pixelBufferIndex,
+      });
     }
   }
 

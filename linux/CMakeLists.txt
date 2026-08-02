@@ -27,6 +27,7 @@ add_library(
   ${PLUGIN_SOURCES}
   opengl_renderer.cc
   fl_angle_texture_gl.cc
+  fl_angle_pixel_texture.cc
 )
 
 # Symbols are hidden by default to reduce the chance of accidental conflicts

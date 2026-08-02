@@ -18,7 +18,8 @@ class OpenglRenderer {
     OpenglRenderer& operator=(OpenglRenderer&& other) noexcept; 
     OpenglRenderer(FlTextureRegistrar*,GdkGLContext*,int,int);
     FlValue *createTexture();
-    void updateTexture();
+    // [index] says which of the two pixel buffers holds the finished frame.
+    void updateTexture(int index);
     void changeSize(int, int);
     void dispose(bool);
 
@@ -32,10 +33,7 @@ class OpenglRenderer {
   private:
     GdkGLContext* context;
     FlTextureRegistrar *textureRegistrar;
-    FlTexture *texture;
-    //FlAngleTextureGL *angleTexture;
-
-    uint32_t texId = 0;
+    FlTexture *texture = nullptr;
 
     // Private method to swap members, helpful for both move constructor and assignment
     void swap(OpenglRenderer& other) noexcept;

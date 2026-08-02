@@ -17,7 +17,6 @@ static gboolean fl_angle_texture_gl_populate(
   uint32_t* height,
   GError **error
 ){
-  // std::cout << "attention: populate called" << std::endl;
   FlAngleTextureGL* f = (FlAngleTextureGL*) texture;
   *target = f->target;
   *name = f->name;
@@ -38,6 +37,19 @@ FlAngleTextureGL *fl_angle_texture_gl_new(
   r->width = width;
   r->height = height;
   return r;
+}
+
+void fl_angle_texture_gl_set(
+  FlAngleTextureGL *self,
+  uint32_t target,
+  uint32_t name,
+  uint32_t width,
+  uint32_t height
+){
+  self->target = target;
+  self->name = name;
+  self->width = width;
+  self->height = height;
 }
 
 static void fl_angle_texture_gl_class_init(FlAngleTextureGLClass *klass){

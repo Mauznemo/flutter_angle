@@ -36,6 +36,15 @@ static void flutter_angle_plugin_handle_method_call(FlutterAnglePlugin *self, Fl
     self->context = gdk_window_create_gl_context(self->window, &error);
     gdk_gl_context_realize (self->context,&error);
 
+    if(self->context == nullptr){
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new(
+        "EGL InitError",
+        error != nullptr?error->message:"Could not create a GL context.",
+        nullptr));
+      fl_method_call_respond(method_call, response, nullptr);
+      return;
+    }
+
     g_autoptr(FlValue) value = fl_value_new_map ();
     fl_value_set_string_take(value, "context", fl_value_new_int ((int64_t)self->context));
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(value));
@@ -71,7 +80,10 @@ static void flutter_angle_plugin_handle_method_call(FlutterAnglePlugin *self, Fl
   }
 	else if (strcmp(method, "textureFrameAvailable") == 0){
     int64_t textureId = 0;
+    int64_t index = 0;
     if(args){
+      FlValue *indexValue = fl_value_lookup_string(args, "index");
+      if(indexValue) index = fl_value_get_int(indexValue);
       textureId = fl_value_get_int(fl_value_lookup_string(args, "textureId"));
       if(!textureId){
         response = FL_METHOD_RESPONSE(fl_method_error_response_new("EGL DeleteError", "Missing textureId.",nullptr));
@@ -86,7 +98,7 @@ static void flutter_angle_plugin_handle_method_call(FlutterAnglePlugin *self, Fl
       return;
     }
 
-    self->map->renderers[textureId]->updateTexture();
+    self->map->renderers[textureId]->updateTexture((int)index);
 
     g_autoptr(FlValue) result = fl_value_new_null();
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));

@@ -1,14 +1,14 @@
 #include "include/opengl_renderer.h"
-#include "include/fl_angle_texture_gl.h"
+#include "include/fl_angle_pixel_texture.h"
 #include <flutter_linux/fl_texture_registrar.h>
+#include <iostream>
 
 OpenglRenderer::OpenglRenderer(
   FlTextureRegistrar* textureRegistrar,
   GdkGLContext* context,
-  int width, 
+  int width,
   int height
 ){
-  printf(".... OpenglRenderer create\n");
   this->textureRegistrar = textureRegistrar;
   this->context = context;
   this->width = width;
@@ -18,9 +18,14 @@ OpenglRenderer::OpenglRenderer(
 }
 
 FlValue *OpenglRenderer::createTexture() {
+  auto pixels = FL_ANGLE_PIXEL_TEXTURE(texture);
   g_autoptr(FlValue) value = fl_value_new_map ();
   fl_value_set_string_take(value, "textureId", fl_value_new_int(textureId));
-  fl_value_set_string_take(value, "openglTexture", fl_value_new_int((int64_t)texId));
+  // The two buffers the renderer reads its frames back into. Handed over as
+  // plain addresses: the Dart side writes straight into them, so a frame never
+  // travels over the method channel.
+  fl_value_set_string_take(value, "buffer0", fl_value_new_int((int64_t)pixels->buffers[0]));
+  fl_value_set_string_take(value, "buffer1", fl_value_new_int((int64_t)pixels->buffers[1]));
   return fl_value_ref(value);
 }
 
@@ -28,39 +33,34 @@ void OpenglRenderer::changeSize(int width, int height) {
   this->width = width;
   this->height = height;
 
-  if(texId != 0){
-    dispose(false);
-  }
-
-  glGenTextures(1, &texId);
-  glBindTexture(GL_TEXTURE_2D, texId);
-
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-  auto ft = fl_angle_texture_gl_new(GL_TEXTURE_2D, texId, width, height);
-  std::cerr << "Create Texture" <<std::endl;
-  texture = FL_TEXTURE(ft);
-  fl_texture_registrar_register_texture(textureRegistrar, texture);
-  if(textureId == 0){
+  if(texture == nullptr){
+    texture = FL_TEXTURE(fl_angle_pixel_texture_new(width, height));
+    fl_texture_registrar_register_texture(textureRegistrar, texture);
     textureId = fl_texture_get_id(texture);
   }
+  else{
+    // Reuse the registered texture. Registering a replacement would leave the
+    // Dart side holding the first id, which nothing draws into any more.
+    fl_angle_pixel_texture_resize(FL_ANGLE_PIXEL_TEXTURE(texture), width, height);
+  }
+
+  std::cerr << "flutter_angle: pixel texture " << textureId << " at "
+            << width << "x" << height << std::endl;
 }
 
-void OpenglRenderer::updateTexture() {
-  fl_texture_registrar_mark_texture_frame_available(textureRegistrar,texture);
+void OpenglRenderer::updateTexture(int index) {
+  if(texture == nullptr) return;
+  fl_angle_pixel_texture_set_ready(FL_ANGLE_PIXEL_TEXTURE(texture), index);
+  fl_texture_registrar_mark_texture_frame_available(textureRegistrar, texture);
 }
 
 void OpenglRenderer::dispose(bool release_context) {
-  std::cerr << "Disposed of and deleted everything." << std::endl;
-  glDeleteTextures(1, &texId);
-  texId = 0;
-  if(release_context){
-    fl_texture_registrar_unregister_texture(textureRegistrar,texture);
-    gdk_gl_context_clear_current();
+  if(release_context && texture != nullptr){
+    fl_texture_registrar_unregister_texture(textureRegistrar, texture);
+    texture = nullptr;
     textureId = 0;
-    g_object_unref(context);
+    // The context belongs to the plugin and is shared by every renderer, so it
+    // is not this one's to clear or unref.
   }
 }
 
@@ -69,17 +69,14 @@ OpenglRenderer::~OpenglRenderer() {
 }
 
 // Move constructor definition
-OpenglRenderer::OpenglRenderer(OpenglRenderer&& other) noexcept: 
-  textureRegistrar(exchange(other.textureRegistrar, nullptr)), // Transfer ownership and nullify other's pointer
-  context(exchange(other.context, nullptr)),
-  width(exchange(other.width, 0)), // Simple members can be just exchanged or copied, depending on semantics
+OpenglRenderer::OpenglRenderer(OpenglRenderer&& other) noexcept:
+  width(exchange(other.width, 0)),
   height(exchange(other.height, 0)),
   textureId(exchange(other.textureId, 0)),
-  texId(exchange(other.texId, 0)),
+  context(exchange(other.context, nullptr)),
+  textureRegistrar(exchange(other.textureRegistrar, nullptr)),
   texture(exchange(other.texture, nullptr)
 ){
-    // Optionally, if there are more complex resources, perform shallow copy or move operations
-    // For example, if you have std::vector<...> members, you would use std::move to transfer their contents
 }
 
 
@@ -95,7 +92,6 @@ OpenglRenderer& OpenglRenderer::operator=(OpenglRenderer&& other) noexcept {
     width = exchange(other.width, 0);
     height = exchange(other.height, 0);
     textureId = exchange(other.textureId, 0);
-    texId = exchange(other.texId, 0);
     texture = exchange(other.texture, nullptr);
   }
   return *this;
@@ -109,6 +105,5 @@ void OpenglRenderer::swap(OpenglRenderer& other) noexcept {
   swap(width, other.width);
   swap(height, other.height);
   swap(textureId, other.textureId);
-  swap(texId, other.texId);
   swap(texture, other.texture);
 }

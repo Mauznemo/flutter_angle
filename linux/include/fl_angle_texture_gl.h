@@ -43,12 +43,27 @@ struct _FlutterAnglePlugin{
   FlTextureRegistrar *textureRegistrar = nullptr;
   FlView *fl_view = nullptr;
   GdkWindow *window = nullptr;
-  GdkGLContext* context;
+  // Handed to Dart, which makes it current on the thread its GL calls run on
+  // and renders into an FBO there. Flutter never sees this context.
+  GdkGLContext* context = nullptr;
 
   Map *map = nullptr;
 };
 
 FlAngleTextureGL *fl_angle_texture_gl_new(
+  uint32_t target,
+  uint32_t name,
+  uint32_t width,
+  uint32_t height
+);
+
+// Points an already registered texture at a different GL texture.
+//
+// Resizing has to reuse the registered FlTexture: the texture id Flutter was
+// handed on creation is the only one the Dart side ever knows about, so
+// registering a replacement leaves the widget showing the old, deleted one.
+void fl_angle_texture_gl_set(
+  FlAngleTextureGL *self,
   uint32_t target,
   uint32_t name,
   uint32_t width,

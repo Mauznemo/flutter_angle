@@ -1,5 +1,24 @@
 # flutter_angle
 
+> **This is a patched copy, not the original.**
+>
+> [flutter_angle](https://github.com/Knightro63/flutter_angle) 0.3.9 with its
+> **Linux** backend rewritten so it actually renders on current Flutter. Only
+> `linux/` and one Linux-only branch in `lib/desktop/angle.dart` differ – macOS,
+> Windows and Android are the stock code.
+>
+> **What changed and why: [SMARTIFY_OS_PATCHES.md](SMARTIFY_OS_PATCHES.md).**
+>
+> Short version: `FlTextureGL` cannot work from a plugin on Flutter 3.41's Linux
+> embedder, because the engine creates its GL contexts with plain EGL and shares
+> them with nothing, while a plugin can only get a GDK context – GLX on X11. The
+> texture name means nothing across the two, so Flutter draws an unrelated
+> texture of its own that happens to carry the same number. This copy sends the
+> frame across as pixels instead.
+>
+> Maintained for [SmartifyOS](https://smartify-os.com/). Everything below is the
+> original README.
+
 [![Pub Version](https://img.shields.io/pub/v/flutter_angle)](https://pub.dev/packages/flutter_angle)
 [![analysis](https://github.com/Knightro63/flutter_angle/actions/workflows/flutter.yml/badge.svg)](https://github.com/Knightro63//flutter_angle/actions/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-purple.svg)](https://opensource.org/licenses/MIT)
